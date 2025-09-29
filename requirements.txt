@@ -1,0 +1,16 @@
+biopython
+flair
+hmmlearn
+keras
+louvain
+matplotlib
+nltk
+numpy
+pandas
+pattern3
+python-igraph
+scanpy
+scipy
+scikit-learn
+seaborn
+tensorflow
