@@ -5,7 +5,7 @@ from tensorflow.keras import Input
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.layers import (
     concatenate, Activation, Dense, Embedding, LSTM, Reshape)
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
+from tensorflow.keras import mixed_precision
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -248,8 +248,8 @@ class LSTMLanguageModel(LanguageModel):
     ):
         super().__init__(seed=seed,)
 
-        #policy = mixed_precision.Policy('mixed_float16')
-        #mixed_precision.set_policy(policy)
+        policy = mixed_precision.Policy('mixed_float16')
+        mixed_precision.set_global_policy(policy)
 
         model = Sequential()
         model.add(Embedding(vocab_size + 1, embedding_dim,
