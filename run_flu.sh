@@ -3,7 +3,7 @@
 #SBATCH --job-name=viral-mutation-gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16         # INCREASED: Matching your memory request/previous attempts
+#SBATCH --cpus-per-task=16        
 #SBATCH --mem=256G                 # HIGH MEMORY REQUEST
 #SBATCH --time=4:00:00
 #SBATCH --partition=gpu            # CRITICAL FIX: Changed from 'cgpu' to 'gpu'
