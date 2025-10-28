@@ -15,15 +15,15 @@ module purge
 module load gcc/10.2.0-bz186       # CRITICAL FIX: Provides GLIBCXX_3.4.26 runtime library
 module load cuda/11.8.0            # CRITICAL FIX: Provides a compatible CUDA version (adjust if needed)
 
-# Use user-installed Miniconda
+
 source /cache/home/aa3860/miniconda3/etc/profile.d/conda.sh
-# Activate environment (must have TensorFlow-GPU installed)
+
 conda activate viral-mutation
 
-# Prevent user site interference (Good Practice)
+
 export PYTHONNOUSERSITE=True
 
-# Change to project directory
+
 cd /cache/home/aa3860/viral-mutation
 
 # Run the script
