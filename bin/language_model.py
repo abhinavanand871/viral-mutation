@@ -67,13 +67,13 @@ class LanguageModel(object):
         )
 
         return y_pred
+    # language_model.py (inside class LanguageModel)
 
     def transform(self, X_cat, lengths, embed_fname=None):
         X = self.split_and_pad(
             X_cat, lengths,
             self.seq_len_, self.vocab_size_, self.verbose_,
         )[0]
-
         # For now, each character in each sequence becomes a sample.
         n_samples = sum(lengths)
         if type(X) == list:
@@ -81,7 +81,6 @@ class LanguageModel(object):
                 assert(X_i.shape[0] == n_samples)
         else:
             assert(X.shape[0] == n_samples)
-
         # Embed using the output of a hidden layer.
         hidden = tf.keras.Model(inputs=self.model_.input, outputs=self.model_.get_layer('embed_layer').output)
         #hidden = tf.keras.backend.function(
@@ -107,12 +106,14 @@ class LanguageModel(object):
         X_embed_cat = np.concatenate(X_embed_cat)
         if self.verbose_:
             tprint('Done embedding.')
-
+            
+        # FIX APPLIED HERE: Use dtype=object to create a ragged array, 
+        # allowing for non-uniform sequence lengths (L_i, D).
         X_embed = np.array([
             X_embed_cat[start:end]
             for start, end in
             iterate_lengths(lengths, self.seq_len_)
-        ])
+        ], dtype=object) # <--- CRITICAL FIX
 
         return X_embed
 
@@ -146,8 +147,8 @@ class DNNLanguageModel(LanguageModel):
             hidden_dim=256,
             n_hidden=2,
             n_epochs=1,
-            batch_size=1000,
-            inference_batch_size=2000,
+            batch_size=300,
+            inference_batch_size=300,
             cache_dir='.',
             model_name='dnn',
             seed=None,
@@ -239,8 +240,8 @@ class LSTMLanguageModel(LanguageModel):
             n_hidden=2,
             dff=512,
             n_epochs=1,
-            batch_size=1000,
-            inference_batch_size=2000,
+            batch_size=300,
+            inference_batch_size=300,
             cache_dir='.',
             model_name='lstm',
             seed=None,
@@ -313,8 +314,8 @@ class BiLSTMLanguageModel(LanguageModel):
             n_hidden=2,
             dff=512,
             n_epochs=1,
-            batch_size=1000,
-            inference_batch_size=1500,
+            batch_size=300,
+            inference_batch_size=300,
             cache_dir='.',
             model_name='bilstm',
             seed=None,
@@ -418,7 +419,7 @@ class AttentionLanguageModel(LanguageModel):
             dff=2048,
             dropout_rate=0.1,
             n_epochs=1,
-            batch_size=1000,
+            batch_size=300,
             cache_dir='.',
             model_name='attention',
             seed=None,

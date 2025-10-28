@@ -163,10 +163,10 @@ def split_seqs(seqs, split_method='random'):
     return train_seqs, test_seqs
 
 def setup(args):
-    fnames = [ 'data/cov/sars_cov2_seqs.fa',
-               'data/cov/viprbrc_db.fasta',
-               'data/cov/gisaid.fasta' ]
-
+    #fnames = [ 'data/cov/sars_cov2_seqs.fa',
+    #           'data/cov/viprbrc_db.fasta',
+    #           'data/cov/gisaid.fasta' ]
+    fnames = ['data/cov/sars_cov2_seqs.fa']
     seqs = process(fnames)
 
     seq_len = max([ len(seq) for seq in seqs ]) + 2
@@ -465,12 +465,12 @@ if __name__ == '__main__':
         tprint('Baum et al. 2020...')
         seq_to_mutate, seqs_escape = load_baum2020()
         analyze_semantics(args, model, vocabulary,
-                          seq_to_mutate, seqs_escape, comb_batch=5000,
+                          seq_to_mutate, seqs_escape, comb_batch=500,
                           prob_cutoff=0, beta=1., plot_acquisition=True,)
         tprint('Greaney et al. 2020...')
         seq_to_mutate, seqs_escape = load_greaney2020()
         analyze_semantics(args, model, vocabulary,
-                          seq_to_mutate, seqs_escape, comb_batch=5000,
+                          seq_to_mutate, seqs_escape, comb_batch=500,
                           min_pos=318, max_pos=540, # Restrict to RBD.
                           prob_cutoff=0, beta=1., plot_acquisition=True,
                           plot_namespace='cov2rbd')
@@ -487,7 +487,7 @@ if __name__ == '__main__':
         for strain in strains:
             analyze_comb_fitness(args, model, vocabulary,
                                  strain, wt_seqs[strain], seqs_fitness,
-                                 comb_batch=10000, prob_cutoff=0., beta=1.)
+                                 comb_batch=1000, prob_cutoff=0., beta=1.)
 
     if args.reinfection:
         if args.checkpoint is None and not args.train:

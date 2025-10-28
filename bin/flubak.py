@@ -1,11 +1,4 @@
 from mutation import *
-from Bio import SeqIO # Add Bio.SeqIO import
-import numpy as np # Ensure numpy is imported
-from collections import Counter # Ensure Counter is imported
-import random
-from anndata import AnnData # Ensure AnnData is imported
-import scanpy as sc # Ensure scanpy is imported
-import matplotlib.pyplot as plt # Ensure pyplot is imported
 
 np.random.seed(1)
 random.seed(1)
@@ -43,7 +36,6 @@ def parse_args():
     return args
 
 def load_meta(meta_fnames):
-    tprint('Loading sequence metadata...')
     metas = {}
     for fname in meta_fnames:
         with open(fname) as f:
@@ -57,26 +49,20 @@ def load_meta(meta_fnames):
                         meta[key] = value.strip('()').split('N')[0].split('/')[-1]
                     elif key == 'Collection Date':
                         meta[key] = int(value.split('/')[-1]) \
-                                        if value != '-N/A-' else None
+                                    if value != '-N/A-' else None
                     elif key == 'Host Species':
                         meta[key] = value.split(':')[1].split('/')[-1].lower()
                     else:
                         meta[key] = value
                 metas[accession] = meta
-    tprint(f'Loaded {len(metas)} metadata records.')
     return metas
 
 def process(fnames, meta_fnames):
-    # Define a limit for the number of unique sequences to process
-    SEQUENCE_LIMIT = 10000  # <--- Setting a small limit for debugging/OOM resolution
-    tprint(f'Processing sequences, limiting to {SEQUENCE_LIMIT} unique sequences.')
     metas = load_meta(meta_fnames)
+
     seqs = {}
     for fname in fnames:
         for record in SeqIO.parse(fname, 'fasta'):
-            # Stop if the limit is reached
-            if len(seqs) >= SEQUENCE_LIMIT:
-                break
             if 'Reference_Perth2009_HA_coding_sequence' in record.description:
                 continue
             if str(record.seq).count('X') > 10:
@@ -84,14 +70,7 @@ def process(fnames, meta_fnames):
             if record.seq not in seqs:
                 seqs[record.seq] = []
             accession = record.description.split('|')[0].split(':')[1]
-            if accession in metas:
-                seqs[record.seq].append(metas[accession])
-            else:
-                 tprint(f'WARNING: Accession {accession} not in metadata. Skipping.')
-        # Break the outer loop if the inner loop broke
-        if len(seqs) >= SEQUENCE_LIMIT:
-            break
-    tprint(f"Loaded {len(seqs)} unique sequences.")
+            seqs[record.seq].append(metas[accession])
     return seqs
 
 def split_seqs(seqs, split_method='random'):
@@ -114,7 +93,7 @@ def split_seqs(seqs, split_method='random'):
                 continue
         train_seqs[seq] = seqs[seq]
     tprint('{} train seqs, {} test seqs.'
-            .format(len(train_seqs), len(test_seqs)))
+           .format(len(train_seqs), len(test_seqs)))
 
     return train_seqs, test_seqs
 
@@ -124,19 +103,15 @@ def setup(args):
 
     seqs = process(fnames, meta_fnames)
 
-    # Calculate max sequence length for model setup
     seq_len = max([ len(seq) for seq in seqs ]) + 2
     vocab_size = len(AAs) + 2
-    tprint(f'Max Sequence Length: {seq_len}. Vocabulary Size: {vocab_size}.')
 
     model = get_model(args, seq_len, vocab_size)
 
     return model, seqs
 
 def interpret_clusters(adata):
-    tprint('Interpreting clusters...')
     clusters = sorted(set(adata.obs['louvain']))
-    # ... (content remains the same) ...
     for cluster in clusters:
         tprint('Cluster {}'.format(cluster))
         adata_cluster = adata[adata.obs['louvain'] == cluster]
@@ -162,10 +137,10 @@ def interpret_clusters(adata):
     for cluster in cluster2subtype:
         count = Counter(cluster2subtype[cluster]).most_common(1)[0][1]
         largest_pct_subtype.append(float(count) /
-                                       len(cluster2subtype[cluster]))
+                                   len(cluster2subtype[cluster]))
         count = Counter(cluster2species[cluster]).most_common(1)[0][1]
         largest_pct_species.append(float(count) /
-                                       len(cluster2species[cluster]))
+                                   len(cluster2species[cluster]))
 
 
     for idx, pct in enumerate(largest_pct_subtype):
@@ -174,18 +149,11 @@ def interpret_clusters(adata):
         tprint('\tCluster {}, largest species % = {}'.format(idx, pct))
 
     tprint('Purity, Louvain and subtype: {}'
-            .format(np.mean(largest_pct_subtype)))
+           .format(np.mean(largest_pct_subtype)))
     tprint('Purity, Louvain and host species: {}'
-            .format(np.mean(largest_pct_species)))
+           .format(np.mean(largest_pct_species)))
 
 def seq_clusters(adata):
-    tprint('Saving cluster FASTA files to target/flu/clusters/...')
-    # --- CRITICAL FIX: Ensure the output directory exists ---
-    output_dir = 'target/flu/clusters/'
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-        tprint(f"Created output directory: {output_dir}")
-    # --- End Fix ---
     clusters = sorted(set(adata.obs['louvain']))
     for cluster in clusters:
         adata_cluster = adata[adata.obs['louvain'] == cluster]
@@ -194,11 +162,8 @@ def seq_clusters(adata):
             for i, (seq, count) in enumerate(counts.most_common()):
                 of.write('>cluster{}_{}_{}\n'.format(cluster, i, count))
                 of.write(seq + '\n\n')
-    tprint('Done saving cluster FASTA files.')
 
 def plot_umap(adata, namespace='flu'):
-    # ... (content remains the same) ...
-    tprint(f'Plotting UMAPs for namespace: {namespace}...')
     if namespace == 'flu1918':
         plt.figure()
         ax = plt.gca()
@@ -219,59 +184,31 @@ def plot_umap(adata, namespace='flu'):
                save='_{}_date.png'.format(namespace))
     sc.pl.umap(adata, color='louvain',
                save='_{}_louvain.png'.format(namespace))
-    tprint(f'Done plotting UMAPs for namespace: {namespace}.')
 
 def analyze_embedding(args, model, seqs, vocabulary):
-    tprint('Starting embedding analysis...')
     seqs = embed_seqs(args, model, seqs, vocabulary, use_cache=True)
+
     X, obs = [], {}
     obs['n_seq'] = []
     obs['seq'] = []
-    tprint(f"Aggregating embeddings for {len(seqs)} unique sequences...")
     for seq in seqs:
         meta = seqs[seq][0]
-        embedding_data = meta['embedding']
-        # --- FIX FOR INHOMOGENEOUS SHAPE ERROR ---
-        # The embedding must be a numpy array to use .mean(0)
-        if not isinstance(embedding_data, np.ndarray):
-            embedding_data = np.array(embedding_data)
-        # Check for empty embedding (shouldn't happen, but good practice)
-        if embedding_data.size == 0:
-            tprint(f"WARNING: Empty embedding for sequence {seq[:10]}...")
-            continue
-        # The BiLSTM produces a [L, D] array (Length x Dimension).
-        # We take the mean across the sequence length (axis 0) to get a single [D] vector.
-        mean_embedding = embedding_data.mean(0)
-        X.append(mean_embedding)
-        # --- END FIX ---
+        X.append(meta['embedding'].mean(0))
         for key in meta:
             if key == 'embedding':
                 continue
             if key not in obs:
                 obs[key] = []
             obs[key].append(Counter([
-                m[key] for m in seqs[seq]
+                meta[key] for meta in seqs[seq]
             ]).most_common(1)[0][0])
         obs['n_seq'].append(len(seqs[seq]))
         obs['seq'].append(str(seq))
-    
-    # NOTE: Assuming the rest of the code is INTENDED to be outside the 'for seq in seqs' loop
-    tprint(f"Attempting to create final AnnData matrix from {len(X)} aggregated vectors.")
-    # Use np.row_stack instead of np.array to handle slight variations 
-    # and provide better diagnostics if an issue persists
-    try:
-        X = np.row_stack(X)
-        tprint(f"Final data matrix X created successfully with shape: {X.shape}")
-    except ValueError as e:
-        tprint(f"CRITICAL ERROR: Failed to stack final embeddings. Check logs for non-uniform vector shapes.")
-        # Re-raise the error to halt the script gracefully with a custom message
-        raise ValueError(f"Inhomogeneous sequence embedding error: {e}")
-        
+    X = np.array(X)
+
     adata = AnnData(X)
     for key in obs:
         adata.obs[key] = obs[key]
-        
-    tprint(f"Initial AnnData size: {adata.n_obs} sequences.")
     adata = adata[
         np.logical_or.reduce((
             adata.obs['Host Species'] == 'human',
@@ -279,40 +216,22 @@ def analyze_embedding(args, model, seqs, vocabulary):
             adata.obs['Host Species'] == 'swine',
         ))
     ]
-    tprint(f"Filtered AnnData size: {adata.n_obs} sequences.")
-    tprint("Running neighbors, Louvain, and UMAP...")
+
     sc.pp.neighbors(adata, n_neighbors=100, use_rep='X')
     sc.tl.louvain(adata, resolution=1.)
-    sc.set_figure_params(dpi_save=500)
-    sc.tl.umap(adata, min_dist=1.)
-    
-    # 1. Plot the full UMAP (This line is safe)
-    plot_umap(adata)
-    
-    # 2. Plotting cluster '30' (THIS IS WHERE THE FIX GOES)
-    # --- CRITICAL FIX FOR ZeroDivisionError START ---
-    
-    # 2a. Slice the data
-    cluster_30_subset = adata[adata.obs['louvain'] == '30'].copy() 
 
-    # 2b. Check if the slice is empty before plotting
-    if cluster_30_subset.n_obs > 0:
-        tprint(f"Plotting UMAP for cluster '30' (n={cluster_30_subset.n_obs}).")
-        plot_umap(
-            cluster_30_subset,
-            namespace='flu1918'
-        )
-    else:
-        tprint("WARNING: Skipping UMAP plot for cluster '30' as it contains 0 sequences.")
-        
-    # --- CRITICAL FIX FOR ZeroDivisionError END ---
-    
+    sc.set_figure_params(dpi_save=500)
+
+    sc.tl.umap(adata, min_dist=1.)
+    plot_umap(adata)
+    plot_umap(adata[adata.obs['louvain'] == '30'],
+              namespace='flu1918')
+
     interpret_clusters(adata)
+
     seq_clusters(adata)
-    tprint('Embedding analysis completed successfully.')
 
 if __name__ == '__main__':
-    # ... (rest of the __main__ block remains the same) ...
     args = parse_args()
 
     AAs = [
@@ -345,7 +264,6 @@ if __name__ == '__main__':
         analyze_embedding(args, model, seqs, vocabulary)
 
     if args.semantics:
-        # ... (rest of args.semantics block remains the same) ...
         if args.checkpoint is None and not args.train:
             raise ValueError('Model must be trained or loaded '
                              'from checkpoint.')
@@ -366,7 +284,6 @@ if __name__ == '__main__':
                           plot_namespace='flu_h3')
 
     if args.combfit:
-        # ... (rest of args.combfit block remains the same) ...
         from combinatorial_fitness import load_doud2016
         tprint('Doud et al. 2016...')
         wt_seqs, seqs_fitness = load_doud2016()

@@ -168,7 +168,7 @@ def plot_umap(adata):
 
 def analyze_embedding(args, model, seqs, vocabulary):
     sorted_seqs = np.array([ str(s) for s in sorted(seqs.keys()) ])
-    batch_size = 3000
+    batch_size = 300
     n_batches = math.ceil(len(sorted_seqs) / float(batch_size))
     for batchi in range(n_batches):
         start = batchi * batch_size

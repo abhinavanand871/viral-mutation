@@ -6,7 +6,7 @@ def err_model(name):
     raise ValueError('Model {} not supported'.format(name))
 
 def get_model(args, seq_len, vocab_size,
-              inference_batch_size=1500):
+              inference_batch_size=300):
     if args.model_name == 'hmm':
         from hmmlearn.hmm import MultinomialHMM
         model = MultinomialHMM(
@@ -169,7 +169,7 @@ def batch_train(args, model, seqs, vocabulary, batch_size=5000,
             del seqs_batch
 
         fname_prefix = ('target/{0}/checkpoints/{1}/{1}_{2}'
-                        .format(args.namespace, args.model_name, args.dim))
+                          .format(args.namespace, args.model_name, args.dim))
 
         if epoch == 0:
             os.rename('{}-01.hdf5'.format(fname_prefix),
@@ -182,10 +182,15 @@ def batch_train(args, model, seqs, vocabulary, batch_size=5000,
 
 def embed_seqs(args, model, seqs, vocabulary,
                use_cache=False, verbose=True, namespace=None):
+    
+    tprint(f'*** Starting embed_seqs for {len(seqs)} sequences ***')
+    
     if namespace is None:
         namespace = args.namespace
-
+    
+    # --- Check for ESM model (External Backend) ---
     if 'esm' in args.model_name:
+        tprint('Detected ESM model. Calling external embedding function.')
         from fb_semantics import embed_seqs_fb
         seqs_fb = [ seq for seq in seqs ]
         return embed_seqs_fb(
@@ -193,29 +198,50 @@ def embed_seqs(args, model, seqs, vocabulary,
             use_cache=use_cache, verbose=verbose,
         )
 
+    # --- Featurization ---
+    tprint('Starting featurization of sequences...')
     X_cat, lengths = featurize_seqs(seqs, vocabulary)
-
+    tprint(f'Finished featurization. Data shape: {X_cat.shape}, Lengths shape: {lengths.shape}')
+    
+    # --- Cache Setup ---
+    embed_fname = None
     if use_cache:
+        tprint(f'Cache is enabled (use_cache={use_cache}). Setting up cache file path.')
         mkdir_p('target/{}/embedding'.format(namespace))
         embed_fname = ('target/{}/embedding/{}_{}.npy'
-                       .format(namespace, args.model_name, args.dim))
-    else:
-        embed_fname = None
-
+                         .format(namespace, args.model_name, args.dim))
+        tprint(f'Expected cache file: {embed_fname}')
+    
+    # --- Cache Check ---
     if use_cache and os.path.exists(embed_fname):
+        tprint(f'Cache file FOUND at {embed_fname}. Loading embeddings from disk.')
         X_embed = np.load(embed_fname, allow_pickle=True)
+        tprint(f'Successfully loaded {X_embed.shape[0]} embeddings from cache.')
     else:
+        if use_cache:
+            tprint('Cache file NOT found. Proceeding with model transformation.')
+        
+        # --- Model Transformation (The Slow Step) ---
+        tprint(f'Starting model transformation (Inference) for {X_cat.shape[0]} sequences.')
         model.verbose_ = verbose
         X_embed = model.transform(X_cat, lengths, embed_fname)
+        tprint('Model transformation completed successfully.')
+        
         if use_cache:
+            tprint(f'Saving generated embeddings to cache file: {embed_fname}')
             np.save(embed_fname, X_embed)
-
+            tprint('Embeddings saved.')
+            
+    # --- Attach Embeddings to Metadata ---
+    tprint('Attaching embeddings to sequence metadata.')
     sorted_seqs = sorted(seqs)
     for seq_idx, seq in enumerate(sorted_seqs):
         for meta in seqs[seq]:
             meta['embedding'] = X_embed[seq_idx]
-
+            
+    tprint('*** Finished embed_seqs and returning results. ***')
     return seqs
+
 
 def predict_sequence_prob(args, seq_of_interest, vocabulary, model,
                           verbose=False):
@@ -325,15 +351,15 @@ def analyze_comb_fitness(
     print('\nStrain: {}'.format(strain))
     print('\tGrammaticality correlation:')
     print('\t\tSpearman r = {:.4f}, P = {:.4g}'
-          .format(*ss.spearmanr(df.preference, df.predicted)))
+              .format(*ss.spearmanr(df.preference, df.predicted)))
     print('\t\tPearson rho = {:.4f}, P = {:.4g}'
-          .format(*ss.pearsonr(df.preference, df.predicted)))
+              .format(*ss.pearsonr(df.preference, df.predicted)))
 
     print('\tSemantic change correlation:')
     print('\t\tSpearman r = {:.4f}, P = {:.4g}'
-          .format(*ss.spearmanr(df.preference, df.sem_change)))
+              .format(*ss.spearmanr(df.preference, df.sem_change)))
     print('\t\tPearson rho = {:.4f}, P = {:.4g}'
-          .format(*ss.pearsonr(df.preference, df.sem_change)))
+              .format(*ss.pearsonr(df.preference, df.sem_change)))
 
     plt.figure()
     plt.scatter(df.preference, df.predicted, alpha=0.3)
@@ -341,7 +367,7 @@ def analyze_comb_fitness(
     plt.xlabel('Preference')
     plt.ylabel('Grammaticality')
     plt.savefig('figures/combinatorial_fitness_grammar_{}_{}.png'
-                .format(args.namespace, strain), dpi=300)
+                  .format(args.namespace, strain), dpi=300)
     plt.close()
 
     plt.figure()
@@ -350,13 +376,16 @@ def analyze_comb_fitness(
     plt.xlabel('Preference')
     plt.ylabel('Semantic change')
     plt.savefig('figures/combinatorial_fitness_semantics_{}_{}.png'
-                .format(args.namespace, strain), dpi=300)
+                  .format(args.namespace, strain), dpi=300)
     plt.close()
 
-def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
-                      min_pos=None, max_pos=None, prob_cutoff=0., beta=1.,
-                      comb_batch=None, plot_acquisition=True,
-                      plot_namespace=None, verbose=True):
+def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,min_pos=None, max_pos=None, prob_cutoff=0., beta=1.,comb_batch=None, plot_acquisition=True,plot_namespace=None, verbose=True):
+
+    batch_start_time = time.time()
+    tprint('Starting analyze_semantics for sequence: {}'.format(seq_to_mutate))
+    tprint('Model: {}, Dims: {}'.format(args.model_name, args.dim))
+
+
     if plot_acquisition:
         dirname = ('target/{}/semantics/cache'.format(args.namespace))
         mkdir_p(dirname)
@@ -373,11 +402,16 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
     y_pred = predict_sequence_prob(
         args, seq_to_mutate, vocabulary, model, verbose=verbose
     )
+    tprint('Calculated predicted probabilities (y_pred) for wild-type sequence.')
 
     if min_pos is None:
         min_pos = 0
     if max_pos is None:
         max_pos = len(seq_to_mutate) - 1
+
+    tprint('Analyzing positions from {} to {} (1-indexed: {} to {})'.format(
+        min_pos, max_pos, min_pos + 1, max_pos + 1
+    ))
 
     word_pos_prob = {}
     for i in range(min_pos, max_pos + 1):
@@ -397,9 +431,11 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
             prob_seqs[mutable] = [ { 'word': word, 'pos': pos } ]
 
     seqs = np.array([ str(seq) for seq in sorted(seq_prob.keys()) ])
+    tprint('Identified {} single-point mutants for embedding.'.format(len(seqs)))
 
     if plot_acquisition:
         ofname = dirname + '/{}_mutations.txt'.format(args.namespace)
+        tprint('Writing mutant list to: {}'.format(ofname))
         with open(ofname, 'w') as of:
             of.write('orig\tmutant\n')
             for seq in seqs:
@@ -408,7 +444,7 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
                         c1 != c2 for c1, c2 in zip(seq_to_mutate, seq)
                     ].index(True)
                     of.write('{}\t{}\t{}\n'
-                             .format(didx, seq_to_mutate[didx], seq[didx]))
+                                 .format(didx, seq_to_mutate[didx], seq[didx]))
                 except ValueError:
                     of.write('NA\n')
 
@@ -416,33 +452,63 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
         args, model, { seq_to_mutate: [ {} ] }, vocabulary,
         use_cache=False, verbose=False
     )[seq_to_mutate][0]['embedding']
+    tprint('Obtained base embedding of shape {}.'.format(base_embedding.shape))
 
     if comb_batch is None:
         comb_batch = len(seqs)
     n_batches = math.ceil(float(len(seqs)) / comb_batch)
+    tprint('Processing embeddings in {} batches of size {}.'.format(
+        int(n_batches), comb_batch
+    ))
 
     seq_change = {}
-    for batchi in range(n_batches):
+    for batchi in range(int(n_batches)):
         start = batchi * comb_batch
         end = (batchi + 1) * comb_batch
+        tprint('Embedding batch {}/{} (sequences {} to {})'.format(
+            batchi + 1, int(n_batches), start, min(end, len(seqs))
+        ))
+
         prob_seqs_batch = {
             seq: deepcopy(prob_seqs[seq]) for seq in seqs[start:end]
             if seq != seq_to_mutate
         }
+        embedding_start_time = time.time()
+        tprint(f'-> [Embedding] Starting model inference for {len(prob_seqs_batch)} sequences...')
+
         prob_seqs_batch = embed_seqs(
             args, model, prob_seqs_batch, vocabulary,
             use_cache=False, verbose=False
         )
+
+        embedding_duration = time.time() - embedding_start_time
+        tprint(f'-> [Embedding] Finished inference in {embedding_duration:.2f} seconds.')
+
+        tprint(f'-> [Calculation] Starting semantic change calculation for {len(prob_seqs_batch)} mutants.')
+        mutant_counter = 0
         for mut_seq in prob_seqs_batch:
             meta = prob_seqs_batch[mut_seq][0]
             sem_change = abs(base_embedding - meta['embedding']).sum()
             seq_change[mut_seq] = sem_change
+            mutant_counter += 1
+            # New print to show progress inside the inner loop
+            if mutant_counter % 1000 == 0:
+                tprint(f'   -> Processed {mutant_counter} / {len(prob_seqs_batch)} semantic changes...')
+        
+        # Final print statement for the batch
+        batch_duration = time.time() - batch_start_time
+        tprint(f'--- Batch {batchi + 1}/{int(n_batches)} complete in {batch_duration:.2f} seconds. ---')
+
         del prob_seqs_batch
+    tprint('Finished calculating semantic change for all mutants.')
+
 
     cache_fname = dirname + (
         '/analyze_semantics_{}_{}_{}.txt'
         .format(plot_namespace, args.model_name, args.dim)
     )
+    tprint('Saving results cache to: {}'.format(cache_fname))
+
     probs, changes = [], []
     with open(cache_fname, 'w') as of:
         fields = [ 'pos', 'wt', 'mut', 'prob', 'change',
@@ -457,7 +523,7 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
             is_viable = seq in escape_seqs
             is_escape = ((seq in escape_seqs) and
                          (sum([ m['significant']
-                                for m in escape_seqs[seq] ]) > 0))
+                                 for m in escape_seqs[seq] ]) > 0))
             fields = [ pos, orig, mut, prob, change, is_viable, is_escape ]
             of.write('\t'.join([ str(field) for field in fields ]) + '\n')
             probs.append(prob)
@@ -465,15 +531,17 @@ def analyze_semantics(args, model, vocabulary, seq_to_mutate, escape_seqs,
 
     if plot_acquisition:
         from cached_semantics import cached_escape
+        tprint('Calling cached_escape to generate plot.')
         cached_escape(cache_fname, beta,
                       plot=plot_acquisition,
                       namespace=plot_namespace)
 
+    tprint('analyze_semantics finished.')
     return seqs, np.array(probs), np.array(changes)
 
 def analyze_reinfection(
         args, model, seqs, vocabulary, wt_seq, mutants,
-        namespace='reinfection',
+        namespace='reinfection'
 ):
     if 'esm' in args.model_name:
         vocabulary = {
