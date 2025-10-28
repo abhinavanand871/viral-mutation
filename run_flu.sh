@@ -6,11 +6,11 @@
 #SBATCH --cpus-per-task=16        
 #SBATCH --mem=256G                 # HIGH MEMORY REQUEST
 #SBATCH --time=4:00:00
-#SBATCH --partition=gpu            # CRITICAL FIX: Changed from 'cgpu' to 'gpu'
+#SBATCH --partition=gpu            
 #SBATCH --gres=gpu:1              
 #SBATCH --output=/home/aa3860/viral-mutation/slurm_logs/logs.%j
 #SBATCH --error=/home/aa3860/viral-mutation/slurm_logs/err.%j
-# Load necessary modules (CRITICAL: Fixes the GLIBCXX and CUDA issues)
+
 module purge
 module load gcc/10.2.0-bz186       
 module load cuda/11.8.0            
