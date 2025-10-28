@@ -26,8 +26,5 @@ export PYTHONNOUSERSITE=True
 # Change to project directory
 cd /cache/home/aa3860/viral-mutation
 
-# Optional: Verification check (will show up in the output file)
-python -c "import tensorflow as tf; print('TF built with CUDA:', tf.test.is_built_with_cuda()); print('Devices detected:', tf.config.list_physical_devices('GPU'))"
-
 # Run the script
 python bin/flu.py bilstm --checkpoint models/flu.hdf5 --embed
