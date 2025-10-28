@@ -12,8 +12,8 @@
 #SBATCH --error=/home/aa3860/viral-mutation/slurm_logs/err.%j
 # Load necessary modules (CRITICAL: Fixes the GLIBCXX and CUDA issues)
 module purge
-module load gcc/10.2.0-bz186       # CRITICAL FIX: Provides GLIBCXX_3.4.26 runtime library
-module load cuda/11.8.0            # CRITICAL FIX: Provides a compatible CUDA version (adjust if needed)
+module load gcc/10.2.0-bz186       
+module load cuda/11.8.0            
 
 
 source /cache/home/aa3860/miniconda3/etc/profile.d/conda.sh
